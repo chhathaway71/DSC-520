@@ -1,0 +1,220 @@
+---
+title: "12.1_Assignment_CHathaway"
+author: "Christine Hathaway"
+date: "February 26, 2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r include = FALSE}
+# install packages needed for file
+library(pastecs)
+library(psych)
+library(ggplot2)
+library(dplyr)
+library(ppcor)
+library(reshape)
+```
+
+``` {r include = FALSE}
+empcov <- read.csv('employer_coverage_data.csv', header = TRUE, na.strings = c(""), stringsAsFactors = FALSE)
+indmkt <- read.csv('individual_market_coverage_data.csv', header = TRUE, na.strings = c(""), stringsAsFactors = FALSE)
+med <- read.csv('medicare_data.csv', header = TRUE, na.strings = c(""), stringsAsFactors = FALSE)
+states <- read.csv('states.csv', header = TRUE, na.strings = c(""), stringsAsFactors = FALSE)
+states$Uninsured.Rate..2010. <- states$Uninsured.Rate..2010.*100
+states$Uninsured.Rate..2015. <- states$Uninsured.Rate..2015.*100
+states$Uninsured.Rate.Change..2010.2015. <- states$Uninsured.Rate.Change..2010.2015.*100
+med$share_of_part_b_beneficiaries_using_free_preventive_services_2015 <- med$share_of_part_b_beneficiaries_using_free_preventive_services_2015*100
+```
+
+```{r include = FALSE}
+st_rate <- states[, c("State", "Uninsured.Rate..2010.", "Uninsured.Rate..2015.", "Uninsured.Rate.Change..2010.2015.", "Health.Insurance.Coverage.Change..2010.2015.")]
+
+stsub <- states[, c("State", "State.Medicaid.Expansion..2016.", "Medicaid.Enrollment..2013.", "Medicaid.Enrollment..2016.", "Medicaid.Enrollment.Change..2013.2016.", "Medicare.Enrollment..2016.")]
+st_medex <- na.omit(stsub)
+head(st_rate)
+```
+
+``` {r include = FALSE}
+ind_pre <- indmkt[,c("state", "individuals_with_pre_existing_condition_2009", "individuals_selecting_a_marketplace_plan_2016")]
+
+ind_txcr <- indmkt[,c("state", "individuals_with_marketplace_coverage_q1_2016", "individuals_receiving_tax_credits_q1_2016", "individuals_receiving_cost_sharing_reductions_q1_2016", "purchasing_off_market_who_could_quality_for_tax_credits_2016")]
+```
+
+``` {r include = FALSE}
+empsub <- empcov[, c("state", "people_with_employer_coverage_2015", "avg_annual_growth_in_fam_premiums_for_emp_cov_2000_2010", "avg_annual_growth_family_prem_for_emp_cov_2010_2015", "family_emp_prem_savings_comp_cont_growth_pre_aca_rate_2015", "family_emp_prem_savings_comp_cont_growth_pre_aca_rate_2016")]
+emp_prem <- na.omit(empsub)
+
+emp_mlr <- empcov[, c("state", "total_group_market_consumers_benefiting_from_mlr_rebates_2012", "total_group_market_rebates_2012", "total_group_market_consumers_benefiting_from_mlr_rebates_2013", "total_group_market_rebates_2013", "total_group_market_consumers_benefiting_from_mlr_rebates_2014", "total_group_market_rebates_2014", "total_group_market_consumers_benefiting_from_mlr_rebates_2015", "total_group_market_rebates_2015", "total_group_market_rebates_2012_2015")]
+```
+
+``` {r include = FALSE}
+med_imp <- med[, c("state", "medicare_enrollment_sept_2016", "medicare_beneficiaries_benefitting_from_donut_hole_savings_2015", "share_of_part_b_beneficiaries_using_free_preventive_services_2015", "change_in_hospital_readmission_rates_among_medicare_beneficiaries_2010_2015")]
+
+```
+
+How has the uninsured rate changed since the ACA was enacted?
+
+The biggest increase in coverage occurred in California, while the smallest was in North Dakota. The biggest increase in percentage was Nevada, while the smallest was in Massachusetts.
+
+``` {r}
+format(stat.desc(st_medex), scientific = FALSE)
+#State with the biggest change
+st_rate[which.max(st_rate$Health.Insurance.Coverage.Change..2010.2015.),]
+
+#State with the smallest change
+st_rate[which.min(st_rate$Health.Insurance.Coverage.Change..2010.2015.),]
+
+#States with smallest percentage of change in uninsured rate
+st_rate[order(st_rate$Uninsured.Rate.Change..2010.2015., decreasing = T)[1:5],]
+
+#States with biggest percentage of change in uninsured rate
+st_rate[order(st_rate$Uninsured.Rate.Change..2010.2015.)[1:5],]
+hist(st_rate$Uninsured.Rate.Change..2010.2015., main = "Change in Uninsured Rate After ACA", xlab = "Percent Change")
+```
+
+The chart above shows the most frequent percent change was a decrease of 5%. Overall, all states saw a decrease in the uninsured rate after the ACA was enacted.
+
+How did Medicaid enrollment change for states that expanded vs those that didn’t? 
+
+States that expanded their Medicaid program saw significantly larger increases in enrollment than those that did not.
+
+``` {r}
+format(stat.desc(st_medex), scientific = FALSE)
+st_medex$pct <-  st_medex$Medicaid.Enrollment.Change..2013.2016./st_medex$Medicaid.Enrollment..2013. * 100
+ggplot(data = st_medex) + geom_histogram(binwidth = 10, aes(x = pct)) +  facet_wrap(~State.Medicaid.Expansion..2016.)
+```
+
+The correlation coefficient displays a positive correlation between states that expanded medicaid and an increase in enrollment.
+The logistic regression model displays the change in enrollment as a percent to predict if a state has expanded mediciad. The results indicate that as the percent or enrollment increases, there is a good chance that the state expanded.
+``` {r}
+# Correlation
+cor(st_medex$State.Medicaid.Expansion..2016.,st_medex$pct, method = "kendall" )
+
+# Logistic Regression model
+mod <- glm(State.Medicaid.Expansion..2016. ~ pct, data = st_medex, family = binomial())
+summary(mod)
+plot(mod)
+hist(rstudent(mod))
+```
+
+What were the changes in percentages of individuals with prior existing conditions selecting a marketplace plan? 
+
+Hawaii saw the smallest percentage of individuals with preexisting conditions selecting a marketplace plan, while Florida had the largest.
+
+``` {r}
+format(stat.desc(ind_pre), scientific = FALSE)
+ind_pre$pct <- ind_pre$individuals_selecting_a_marketplace_plan_2016/ind_pre$individuals_with_pre_existing_condition_2009 * 100
+
+# State with largest percentage of individuals selecting a marketplace plan
+ind_pre[which.max(ind_pre$pct),]
+
+# State with smallest percentage of individuals selecting a marketplace plan
+ind_pre[which.min(ind_pre$pct),]
+
+#States with largest percentage of individuals selecting a marketplace plan
+ind_pre[order(ind_pre$pct, decreasing = T)[1:5],]
+
+#States with smallest percentage of individuals selecting a marketplace plan
+ind_pre[order(ind_pre$pct)[1:5],]
+
+hist(ind_pre$pct, main = "Individuals With Pre-existing Conditions Selecting Marketplace Plan", xlab = "Percent")
+```
+
+This chart shows the frequency of individuals with pre-existing conditions in 2009 selecting marketplace insurance in 2016. In 30 states, this was 8%.
+
+
+Individuals with marketplace plans receiving tax credits and cost sharing reductions, vs individuals eligible for tax credit but purchasing off market insurance
+
+``` {r}
+ind_txcr$txcrpct <- ind_txcr$individuals_receiving_tax_credits_q1_2016/ind_txcr$individuals_with_marketplace_coverage_q1_2016*100
+ind_txcr$cstshrpct <- ind_txcr$individuals_receiving_cost_sharing_reductions_q1_2016/ind_txcr$individuals_with_marketplace_coverage_q1_2016*100
+
+format(stat.desc(ind_txcr), scientific = FALSE)
+
+ggplot(ind_txcr, aes(individuals_with_marketplace_coverage_q1_2016, purchasing_off_market_who_could_quality_for_tax_credits_2016)) + geom_point() + geom_smooth(method = "lm", se = F) + labs(title = "Individuals Qualified for Tax Credits", x = "Individuals Purchasing Marketplace Coverage", y = "Individuals Purchasing Off Market")
+```
+
+This chart shows individuals that qualified for tax credits, and compares those purchasing marketplace coverage vs. those that purchased off market coverage. 
+
+The correlation coefficient shows a strong, positive relationship between individuals with marketplace coverage and individuals qualified for tax credits that purchase off market coverage.
+
+The regression model uses variables for individuals receiving tax credits or cost sharing reductions predicting individuals with marketplace coverage. The model indicates that the two variables explain 99.6% of the variance in individuals with marketplace coverage.
+
+``` {r}
+# Correlation
+cor(ind_txcr$individuals_with_marketplace_coverage_q1_2016,ind_txcr$purchasing_off_market_who_could_quality_for_tax_credits_2016, method = "kendall" )
+
+# Regression model
+mod2 <- lm(individuals_with_marketplace_coverage_q1_2016~individuals_receiving_tax_credits_q1_2016 + individuals_receiving_cost_sharing_reductions_q1_2016, data = ind_txcr)
+summary(mod2)
+plot(mod2)
+hist(rstudent(mod2))
+```
+
+What is the change in premiums, comparing 2000-2010 rate changes to 2010-2015 rate changes? 
+
+New York had the highest growth in premiums for employee coverage, while Florida had the lowest
+
+
+``` {r message = FALSE, warning = FALSE}
+format(stat.desc(emp_prem), scientific = FALSE)
+#States with highest growth in premiums for employee coverage
+emp_prem[which.max(emp_prem$avg_annual_growth_family_prem_for_emp_cov_2010_2015),]
+
+#States with lowest growth in premiums for employee coverage
+emp_prem[which.min(emp_prem$avg_annual_growth_family_prem_for_emp_cov_2010_2015),]
+
+#States with largest annual growth in premiums 2010 - 2015
+emp_prem[order(emp_prem$avg_annual_growth_family_prem_for_emp_cov_2010_2015, decreasing = T)[1:5],]
+
+#States with smallest annual growth in premiums 2010 - 2015
+emp_prem[order(emp_prem$avg_annual_growth_family_prem_for_emp_cov_2010_2015)[1:5],]
+
+labs <- c("2015", "2016")
+temp <- emp_prem[, c(1, 5, 6)]
+temp <- melt(temp)
+variable_names <- c("family_emp_prem_savings_comp_cont_growth_pre_aca_rate_2015" = "2015", "family_emp_prem_savings_comp_cont_growth_pre_aca_rate_2016" = "2016")
+ggplot(temp, aes(value, fill = factor(variable, labels = c("2015", "2016")))) + geom_histogram(binwidth=1000) + facet_grid(variable~., labeller = as_labeller(variable_names)) + labs(title = "Employer Premium Savings Rate", fill = "Year")
+```
+
+What is the trend or change in Medical Loss Ratio (MLR) rebates for insurance providers?
+
+The rate was largest in 2012, with a large dip in 2013. Over the years of 2014 and 2015, the change has trended upwards towards 2012 numbers again.
+
+
+``` {r message = FALSE, warning = FALSE}
+format(stat.desc(emp_mlr), scientific = FALSE)
+temp2 <- emp_mlr[, c(1, 3, 5, 7, 9)]
+temp2 <- melt(temp2)
+
+ggplot(temp2, aes(factor(variable), value)) + stat_summary(fun.y = mean, geom = "line", aes(group = 1)) + labs(title = "Employee MLR", x = "Year")
+
+ggplot(temp2, aes(value, factor(variable, labels = c("2012", " 2013", "2014", "2015")))) + geom_point(aes(color = factor(variable, labels = c("2012", " 2013", "2014", "2015")))) + labs(y = "Year", color = "Years")
+
+ggplot(temp2, aes(value, fill = factor(variable,labels = c("2012", " 2013", "2014", "2015")))) + geom_density(aes(value)) + labs(fill = "Year")
+```
+
+How has Medicare been impacted, as in free services utilized, the “donut hole gap” in prescription coverage, or changes in hospital readmission rates?
+
+The correlation coefficient shows a small, negative relationship between hospital readmission rates for medicare beneficiaries and those beneficiaries using free preventive services. This shows a decrease in readmission rates for those using free services.
+
+The regression model uses the variables for beneficiaries using free preventive services and donut savings to predict the change in hospital readmission rates amoung beneficiaries. The model indicates that the two variables can account for 19% of the change in the readmission rate. 
+
+``` {r}
+med_imp$sh_donut <- med_imp$medicare_beneficiaries_benefitting_from_donut_hole_savings_2015/med_imp$medicare_enrollment_sept_2016
+
+# Correlation
+cor(med_imp$change_in_hospital_readmission_rates_among_medicare_beneficiaries_2010_2015, med_imp$share_of_part_b_beneficiaries_using_free_preventive_services_2015, method = "kendall" )
+
+#Logistic Regression Model
+mod3 <- lm(change_in_hospital_readmission_rates_among_medicare_beneficiaries_2010_2015~share_of_part_b_beneficiaries_using_free_preventive_services_2015 + sh_donut, data = med_imp)
+summary(mod3)
+plot(mod3)
+hist(rstudent(mod3))
+
+```
