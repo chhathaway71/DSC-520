@@ -1,7 +1,7 @@
 # DSC-520 Examining the Impact of the ACA on Health Insurance
 
 ## Description
-This project examines the impact of the new aCA on the Health Insurance industry
+This project examines the impact of the new ACA on the Health Insurance industry
 
 ## Installation
 The Data folder contains csv files for 4 datasets of data obtained from the U.S Dept of health & Human Services as well as Kaggle
